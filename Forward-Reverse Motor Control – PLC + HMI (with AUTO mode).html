@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Forward-Reverse Motor Control – PLC + HMI</title>
+<style>
+:root{--bg:#f4f6f9;--panel:#fff;--fg:#1b2430;--muted:#5b6675;--line:#b8c1cc;--off:#c3cad3;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f141a;--panel:#1a222c;--fg:#e6ebf1;--muted:#93a0b0;--line:#3a4756;--off:#3a4552}}
+:root[data-theme="dark"]{--bg:#0f141a;--panel:#1a222c;--fg:#e6ebf1;--muted:#93a0b0;--line:#3a4756;--off:#3a4552}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px system-ui,sans-serif;padding:10px 16px;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+h1{font-size:18px;margin:0 0 2px}.sub{color:var(--muted);margin:0 0 10px;font-size:13px}
+main{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 470px;gap:14px}aside{display:flex;flex-direction:column;gap:8px;min-height:0;overflow:auto;font-size:15px}aside .stats,aside .leg{margin:0}
+svg{width:100%;height:100%;min-height:0;background:var(--panel);border:1px solid var(--line);border-radius:10px;display:block}
+svg text{fill:var(--fg);font-family:system-ui,sans-serif}.m{fill:var(--muted)!important}
+.box{fill:var(--panel);stroke:var(--line);stroke-width:1.5}
+.w{fill:none;stroke-width:4.5;stroke-linecap:round;stroke:var(--off)}
+.r{--c:#e53935}.y{--c:#f2b705}.b{--c:#1e88e5}.o{--c:#fb8c00}
+.on .w,.w.on{stroke:var(--c);stroke-dasharray:9 7;animation:fl .5s linear infinite}
+@keyframes fl{to{stroke-dashoffset:-16}}
+.cl,.bus{fill:none;stroke:var(--off);stroke-width:2;stroke-dasharray:5 4}
+.cl.on,.bus.on{stroke:#2e9e4f;animation:fl .6s linear infinite}
+.tag rect{fill:var(--panel);stroke:var(--line)}.tag text{font-size:10px;font-weight:700;text-anchor:middle}
+.tag.on rect{fill:#2e9e4f;stroke:#2e9e4f}.tag.on text{fill:#fff}
+.led{fill:var(--off);stroke:var(--line)}.led.on{fill:#2e9e4f;filter:drop-shadow(0 0 4px #2e9e4f)}.led.am.on{fill:#fb8c00;filter:drop-shadow(0 0 4px #fb8c00)}
+.btn{cursor:pointer}.btn:active{opacity:.7}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0}
+.st{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px;text-align:center}
+.st b{display:block;font-size:20px}.st span{color:var(--muted);font-size:12px}
+.steps{display:grid;grid-template-columns:1fr;gap:8px}.st b{font-size:24px}.step h3{font-size:16px}.step p{font-size:14px}
+.ex{background:var(--panel);border:2px solid #fb8c00;border-radius:8px;padding:10px 12px;font-size:13.5px}.ex h3{margin:0 0 4px;font-size:15px}.ex p{margin:0 0 6px;color:var(--muted)}
+.br{display:grid;grid-template-columns:118px 1fr 52px;gap:6px;align-items:center;margin:3px 0;font-size:12.5px}.br i{display:block;height:10px;border-radius:5px;background:var(--off)}.br i u{display:block;height:100%;border-radius:5px;text-decoration:none;transition:width .3s}.br b{text-align:right}
+.ex ul{margin:6px 0 0;padding-left:18px;color:var(--muted);font-size:12.5px}.ex li{margin:2px 0}.ex li b{color:var(--fg)}
+@media (max-width:1000px){body{height:auto;overflow:auto}main{display:block}svg{height:auto}aside{margin-top:10px}}
+.step{background:var(--panel);border:2px solid var(--line);border-radius:8px;padding:10px;opacity:.6}
+.step.act{opacity:1;border-color:#2e9e4f}.step h3{margin:0 0 4px;font-size:14px}.step p{margin:0;font-size:12.5px;color:var(--muted)}
+.leg{display:flex;flex-wrap:wrap;gap:12px;margin:10px 0;font-size:12.5px}.leg i{display:inline-block;width:22px;height:4px;vertical-align:middle;margin-right:5px;border-radius:2px}
+</style></head><body>
+<h1>Forward-Reverse Motor Control — PLC + Push-button + HMI</h1>
+<p class="sub">Press FWD / REV / STOP, or AUTO to run the belt back and forth by itself (operator panel or HMI).</p>
+<main><svg preserveAspectRatio="xMidYMid meet" viewBox="0 0 920 660" role="img" aria-label="Forward reverse starter animation">
+<text x="260" y="16" text-anchor="middle" font-size="12" font-weight="700">3-PHASE 400 V SUPPLY &amp; POWER CIRCUIT</text>
+<g font-size="12" font-weight="700" text-anchor="middle"><text x="90" y="34" style="fill:#e53935">L1</text><text x="150" y="34" style="fill:#f2b705">L2</text><text x="210" y="34" style="fill:#1e88e5">L3</text></g>
+<g class="on"><path class="w r" d="M90 42V135"/><path class="w y" d="M150 42V135"/><path class="w b" d="M210 42V135"/>
+<path class="w r" d="M90 100H330V135"/><path class="w y" d="M150 108H390V135"/><path class="w b" d="M210 116H450V135"/></g>
+<g fill="var(--fg)"><circle cx="90" cy="100" r="3"/><circle cx="150" cy="108" r="3"/><circle cx="210" cy="116" r="3"/></g>
+<g><path class="w" d="M90 165V284"/><path class="w" d="M150 165V300"/><path class="w" d="M210 165V292"/><path class="w" d="M330 165V284H90"/><path class="w" d="M390 165V292H210"/><path class="w" d="M450 165V300H150"/><path class="w" d="M90 284V395"/><path class="w" d="M150 300V395"/><path class="w" d="M210 292V395"/></g>
+<g id="gF"><path class="w r" d="M90 165V284"/><path class="w y" d="M150 165V300"/><path class="w b" d="M210 165V292"/></g>
+<g id="gR"><path class="w r" d="M330 165V284H90"/><path class="w y" d="M390 165V292H210"/><path class="w b" d="M450 165V300H150"/></g>
+<g id="gC1"><path class="w r" d="M90 284V395"/></g>
+<g id="gCF"><path class="w y" d="M150 300V395"/><path class="w b" d="M210 292V395"/></g>
+<g id="gCR"><path class="w b" d="M150 300V395"/><path class="w y" d="M210 292V395"/></g>
+<rect class="box" x="50" y="60" width="200" height="28" rx="4"/><text x="244" y="79" text-anchor="end" font-size="11" class="m">MCCB</text>
+<rect class="box" x="50" y="120" width="240" height="60" rx="4"/><text x="284" y="136" text-anchor="end" font-size="11" class="m">KM1 FORWARD</text>
+<rect class="box" x="300" y="120" width="200" height="60" rx="4"/><text x="494" y="136" text-anchor="end" font-size="11" class="m">KM2 REVERSE</text>
+<rect class="box" x="50" y="335" width="200" height="24" rx="4"/><text x="244" y="351" text-anchor="end" font-size="11" class="m">OVERLOAD</text>
+<g stroke-width="4" stroke-linecap="round"><circle cx="90" cy="135" r="4" fill="#e53935"/><circle cx="90" cy="165" r="4" fill="#e53935"/><line id="f0" x1="90" y1="165" x2="90" y2="135" stroke="#e53935"/><circle cx="150" cy="135" r="4" fill="#f2b705"/><circle cx="150" cy="165" r="4" fill="#f2b705"/><line id="f1" x1="150" y1="165" x2="150" y2="135" stroke="#f2b705"/><circle cx="210" cy="135" r="4" fill="#1e88e5"/><circle cx="210" cy="165" r="4" fill="#1e88e5"/><line id="f2" x1="210" y1="165" x2="210" y2="135" stroke="#1e88e5"/><circle cx="330" cy="135" r="4" fill="#e53935"/><circle cx="330" cy="165" r="4" fill="#e53935"/><line id="r0" x1="330" y1="165" x2="330" y2="135" stroke="#e53935"/><circle cx="390" cy="135" r="4" fill="#f2b705"/><circle cx="390" cy="165" r="4" fill="#f2b705"/><line id="r1" x1="390" y1="165" x2="390" y2="135" stroke="#f2b705"/><circle cx="450" cy="135" r="4" fill="#1e88e5"/><circle cx="450" cy="165" r="4" fill="#1e88e5"/><line id="r2" x1="450" y1="165" x2="450" y2="135" stroke="#1e88e5"/></g>
+<g font-size="10" class="m"><text x="98" y="388">U</text><text x="158" y="388">V</text><text x="218" y="388">W</text></g>
+<g fill="var(--panel)" stroke="var(--fg)" stroke-width="2"><circle cx="90" cy="395" r="6"/><circle cx="150" cy="395" r="6"/><circle cx="210" cy="395" r="6"/></g>
+<text id="tSeq" x="150" y="420" text-anchor="middle" font-size="11" font-weight="700">U=L1 V=L2 W=L3</text>
+<g class="tag" id="tX"><rect x="300" y="196" width="190" height="34" rx="6"/><text x="395" y="210" style="font-size:11px">PHASE SWAP in KM2:</text><text x="395" y="224" style="font-size:11px">L2 ⇄ L3 reach motor</text></g>
+<circle cx="150" cy="480" r="38" class="box"/>
+<g id="rot"><line x1="150" y1="446" x2="150" y2="514" stroke="#7a8696" stroke-width="5" stroke-linecap="round"/><line x1="116" y1="480" x2="184" y2="480" stroke="#7a8696" stroke-width="5" stroke-linecap="round"/><polygon points="150,444 160,452 150,458" fill="#fb8c00"/></g>
+<circle cx="150" cy="480" r="13" fill="var(--panel)" stroke="var(--fg)" stroke-width="2"/><text x="150" y="484" text-anchor="middle" font-size="12" font-weight="700">M</text>
+<text x="205" y="466" font-size="11" class="m">3~ Induction motor</text><text id="mRpm" x="205" y="494" font-size="26" font-weight="700">0 rpm</text><text id="mDir" x="205" y="514" font-size="13" font-weight="700">STOPPED</text>
+<rect class="box" x="20" y="562" width="480" height="90" rx="6"/><text x="28" y="577" font-size="10" class="m">VOLTAGE AT MOTOR TERMINALS U-V-W (live, wave direction shows phase sequence)</text>
+<line x1="30" x2="490" y1="615" y2="615" stroke="var(--line)"/>
+<path id="wv0" fill="none" stroke="#e53935" stroke-width="2"/><path id="wv1" fill="none" stroke="#f2b705" stroke-width="2"/><path id="wv2" fill="none" stroke="#1e88e5" stroke-width="2"/>
+<path class="cl" id="c0" d="M540 330H524V122H262V149"/><path class="cl" id="c1" d="M540 372H515V162H496"/>
+<g id="k0"><circle class="led" cx="262" cy="162" r="13"/><text x="262" y="166" text-anchor="middle" font-size="10" font-weight="700">KM1</text></g>
+<g id="k1"><circle class="led" cx="483" cy="162" r="13"/><text x="483" y="166" text-anchor="middle" font-size="10" font-weight="700">KM2</text></g>
+<rect class="box" x="540" y="20" width="360" height="92" rx="8"/><text x="552" y="38" font-size="12" font-weight="700">OPERATOR PANEL (field)</text>
+<g class="btn" onclick="act('f','Push-button')"><circle cx="580" cy="73" r="20" fill="#2e9e4f"/><text x="580" y="77" text-anchor="middle" font-size="11" font-weight="700" style="fill:#fff">FWD</text></g>
+<g class="btn" onclick="act('r','Push-button')"><circle cx="635" cy="73" r="20" fill="#1e88e5"/><text x="635" y="77" text-anchor="middle" font-size="11" font-weight="700" style="fill:#fff">REV</text></g>
+<g class="btn" onclick="act('s','Push-button')"><circle cx="690" cy="73" r="20" fill="#d32f2f"/><text x="690" y="77" text-anchor="middle" font-size="11" font-weight="700" style="fill:#fff">STOP</text></g>
+<circle id="lmF" class="led" cx="795" cy="66" r="9"/><text x="795" y="95" text-anchor="middle" font-size="10" class="m">FWD ⟳</text>
+<circle id="lmR" class="led am" cx="838" cy="66" r="9"/><text x="838" y="95" text-anchor="middle" font-size="10" class="m">REV ⟲</text><g class="btn" onclick="am('Push-button')"><circle id="bA" cx="745" cy="73" r="20" fill="#fb8c00" stroke="var(--fg)" stroke-width="0"/><text x="745" y="77" text-anchor="middle" font-size="11" font-weight="700" style="fill:#fff">AUTO</text></g><circle id="lmA" class="led" cx="881" cy="66" r="9"/><text x="881" y="95" text-anchor="middle" font-size="10" class="m">AUTO</text>
+<rect class="box" x="540" y="124" width="360" height="148" rx="8"/><text x="552" y="142" font-size="12" font-weight="700">HMI TOUCH PANEL</text>
+<rect x="550" y="150" width="165" height="112" rx="4" fill="#102a43"/>
+<text x="558" y="168" font-size="10" style="fill:#9fb3c8">MOTOR STATE</text><text id="tState" x="558" y="188" font-size="14" font-weight="700" style="fill:#fff">READY</text>
+<text id="tDir" x="558" y="208" font-size="11" style="fill:#9fb3c8">Direction: –</text>
+<text id="tTim" x="558" y="228" font-size="10" style="fill:#9fb3c8">Dead time T1: 2.0 s</text><rect x="558" y="233" width="148" height="8" rx="4" fill="#243b53"/><rect id="barT" x="558" y="233" width="0" height="8" rx="4" fill="#fb8c00"/>
+<text id="tSrc" x="558" y="256" font-size="10" style="fill:#9fb3c8">Last cmd: –</text>
+<g class="btn" onclick="act('f','HMI')"><rect x="725" y="150" width="165" height="24" rx="8" fill="#2e9e4f"/><text x="807" y="167" text-anchor="middle" font-size="13" font-weight="700" style="fill:#fff">HMI FORWARD</text></g>
+<g class="btn" onclick="act('r','HMI')"><rect x="725" y="178" width="165" height="24" rx="8" fill="#1e88e5"/><text x="807" y="195" text-anchor="middle" font-size="13" font-weight="700" style="fill:#fff">HMI REVERSE</text></g>
+<g class="btn" onclick="act('s','HMI')"><rect x="725" y="206" width="165" height="24" rx="8" fill="#d32f2f"/><text x="807" y="223" text-anchor="middle" font-size="13" font-weight="700" style="fill:#fff">HMI STOP</text></g><g class="btn" onclick="am('HMI')"><rect x="725" y="234" width="165" height="24" rx="8" fill="#fb8c00"/><text id="hAt" x="807" y="251" text-anchor="middle" font-size="13" font-weight="700" style="fill:#fff">HMI AUTO</text></g>
+<rect class="box" x="540" y="288" width="360" height="202" rx="8"/><text x="720" y="304" text-anchor="middle" font-size="12" font-weight="700">PLC CONTROL UNIT</text>
+<text x="555" y="318" font-size="9" class="m">OUTPUTS</text><text x="712" y="318" font-size="9" class="m">INPUTS</text>
+<g font-size="11"><circle id="o0" class="led" cx="555" cy="330" r="7"/><text x="568" y="334">Q0.0 → KM1 FWD</text><circle id="o1" class="led" cx="555" cy="372" r="7"/><text x="568" y="376">Q0.1 → KM2 REV</text><circle id="i0" class="led" cx="715" cy="330" r="7"/><text x="728" y="334">I0.0 FWD PB</text><circle id="i1" class="led" cx="715" cy="350" r="7"/><text x="728" y="354">I0.1 REV PB</text><circle id="i2" class="led" cx="715" cy="370" r="7"/><text x="728" y="374">I0.2 STOP PB</text><circle id="i3" class="led" cx="715" cy="390" r="7"/><text x="728" y="394">I0.3 HMI FWD</text><circle id="i4" class="led" cx="715" cy="410" r="7"/><text x="728" y="414">I0.4 HMI REV</text><circle id="i5" class="led" cx="715" cy="430" r="7"/><text x="728" y="434">I0.5 HMI STOP</text><circle id="i6" class="led" cx="715" cy="450" r="7"/><text x="728" y="454">I0.6 LIMIT FWD</text><circle id="i7" class="led" cx="715" cy="470" r="7"/><text x="728" y="474">I0.7 LIMIT REV</text></g>
+<text x="555" y="420" font-size="11">T1 dead time 2 s</text><rect x="555" y="428" width="140" height="9" rx="4" fill="var(--off)"/><rect id="barP" x="555" y="428" width="0" height="9" rx="4" fill="#fb8c00"/>
+<circle id="ilk" class="led am" cx="562" cy="462" r="7"/><text x="574" y="466" font-size="11" font-weight="700">INTERLOCK ACTIVE</text><circle id="lA" class="led" cx="562" cy="480" r="6"/><text x="574" y="484" font-size="11" font-weight="700">M0.0 AUTO MODE</text>
+<path class="bus" id="bus" d="M900 73H912V318H900M900 200H912"/>
+<rect class="box" x="540" y="500" width="360" height="152" rx="8"/><text x="552" y="518" font-size="12" font-weight="700">REAL EXAMPLE: FACTORY CONVEYOR (forward / reverse)</text>
+<rect x="580" y="600" width="280" height="16" rx="8" fill="var(--off)"/>
+<circle id="rl0" cx="582" cy="608" r="15" class="box"/><circle id="rl1" cx="858" cy="608" r="15" class="box"/>
+<g id="spk"><line x1="570" y1="608" x2="594" y2="608" stroke="#7a8696" stroke-width="3"/><line x1="582" y1="596" x2="582" y2="620" stroke="#7a8696" stroke-width="3"/></g>
+<g id="spk2"><line x1="846" y1="608" x2="870" y2="608" stroke="#7a8696" stroke-width="3"/><line x1="858" y1="596" x2="858" y2="620" stroke="#7a8696" stroke-width="3"/></g>
+<rect x="566" y="568" width="6" height="32" fill="var(--fg)"/><circle id="lsR" class="led am" cx="569" cy="560" r="6"/><text x="569" y="545" text-anchor="middle" font-size="10">LS-R</text>
+<rect x="868" y="568" width="6" height="32" fill="var(--fg)"/><circle id="lsF" class="led" cx="871" cy="560" r="6"/><text x="871" y="545" text-anchor="middle" font-size="10">LS-F</text>
+<g id="bx"><rect x="0" y="564" width="44" height="36" rx="3" fill="#c58b4a" stroke="#8a5a26" stroke-width="2"/><rect x="18" y="564" width="8" height="36" fill="#e2b676"/></g>
+<text id="cvT" x="720" y="640" text-anchor="middle" font-size="12" font-weight="700">Belt stopped</text>
+<text x="720" y="530" text-anchor="middle" font-size="10" class="m">Manual: limit switch stops the belt · AUTO: belt shuttles end to end</text>
+</svg><aside>
+<div class="leg"><span><i style="background:#e53935"></i>L1</span><span><i style="background:#f2b705"></i>L2</span><span><i style="background:#1e88e5"></i>L3</span><span><i style="background:#2e9e4f"></i>Control signal (PLC)</span><span><i style="background:var(--off)"></i>No voltage</span></div>
+<div class="stats"><div class="st"><b id="sD">STOP</b><span>Direction</span></div><div class="st"><b id="sP">–</b><span>Phase sequence</span></div><div class="st"><b id="sN">0 rpm</b><span>Motor speed</span></div></div>
+<div class="steps">
+<div class="step" id="p0"><h3>① Ready</h3><p>Supply on, KM1 and KM2 both OFF. PLC waits for FWD, REV or STOP from the push-button or HMI.</p></div>
+<div class="step" id="p1"><h3>② Forward run</h3><p>PLC energizes KM1: L1→U, L2→V, L3→W. Rotating field turns the motor clockwise.</p></div>
+<div class="step" id="p2"><h3>③ Interlock + dead time</h3><p>Opposite button pressed: PLC drops the running contactor first, waits T1 = 2 s. KM1 + KM2 together would short L2 to L3!</p></div>
+<div class="step" id="p3"><h3>④ Reverse run</h3><p>PLC energizes KM2: two phases are swapped (V gets L3, W gets L2). Field turns the other way, so the motor reverses.</p></div>
+<div class="step" id="p4"><h3>⑤ AUTO mode</h3><p>AUTO bit M0.0 set: PLC runs forward to LS-F, stops, waits T1 = 2 s, runs reverse to LS-R, waits, and repeats. FWD / REV are locked; STOP or AUTO again ends the cycle.</p></div>
+</div>
+<div class="ex"><h3>🏭 Real example: Conveyor in a packing plant</h3>
+<p>Motor <b>2.2 kW, 400 V, In ≈ 4.9 A</b>, moves cartons to the packing or the return side.</p>
+<ul><li><b>KM1, KM2: 9 A AC-3</b> contactors, with a mechanical interlock between them</li>
+<li><b>Electrical interlock:</b> NC aux contact of each contactor wired in the other coil circuit</li>
+<li><b>MCCB 10 A</b> (motor-rated), <b>overload set 4.9 A</b></li>
+<li><b>Limit switches</b> LS-F / LS-R stop the belt at each end</li>
+<li><b>Dead time 1–2 s</b> avoids plugging current and mechanical shock</li>
+<li>Same method: hoist, crane, lift, gate, mixer, lathe</li></ul></div>
+<p class="sub">Press FWD, then REV while running: watch the dead time, then the motor and belt reverse.</p>
+</aside></main>
+<script>
+const $=id=>document.getElementById(id),tg=(id,c)=>$(id).classList.toggle('on',!!c);
+const S={km1:0,km2:0,st:'IDLE',t:0,pend:0,speed:0,ang:0,lvl:0,dir:1,src:'–',auto:0,aw:0,ad:1,cyc:0},lit={};let bx=700;
+function run(k,src){S.src=src;
+ if(k==='s'){S.km1=S.km2=0;S.st='IDLE';S.pend=0;return}
+ const d=k==='f'?1:-1;
+ if(S.st==='IDLE'){S[d>0?'km1':'km2']=1;S.dir=d;S.st=d>0?'RUN_F':'RUN_R'}
+ else if(S.st==='DEAD'){S.pend=d}
+ else if((S.st==='RUN_F'&&d<0)||(S.st==='RUN_R'&&d>0)){S.km1=S.km2=0;S.st='DEAD';S.pend=d;S.t=2}}
+function act(k,src){const h=src==='HMI';lit[({f:h?'i3':'i0',r:h?'i4':'i1',s:h?'i5':'i2'})[k]]=Date.now()+700;if(k==='s')S.auto=0;else if(S.auto){S.src='Locked in AUTO';return}run(k,src)}
+function am(src){lit.a=Date.now()+700;S.auto=S.auto?0:1;
+ if(S.auto){S.src='AUTO ON';S.ad=S.st==='IDLE'?(bx>=828?-1:bx<=572?1:S.ad):S.st==='DEAD'?S.pend:S.dir;S.aw=1}
+ else run('s','AUTO OFF')}
+setInterval(()=>{if(S.st==='DEAD'){S.t=Math.max(0,S.t-.1);if(S.t<=0){const d=S.pend;S[d>0?'km1':'km2']=1;S.dir=d;S.st=d>0?'RUN_F':'RUN_R'}}},100);
+setInterval(()=>{if(S.auto&&S.st==='IDLE'){S.aw=Math.max(0,S.aw-.1);if(S.aw<=0)run(S.ad>0?'f':'r','AUTO')}},100);
+const tg2=(id,c)=>{const e=$(id);e.style.display=c?'':'none';e.classList.toggle('on',!!c)};
+const names={IDLE:'READY / STOPPED',RUN_F:'RUNNING FORWARD',RUN_R:'RUNNING REVERSE',DEAD:'INTERLOCK WAIT'},idx={IDLE:0,RUN_F:1,DEAD:2,RUN_R:3};
+let last=performance.now(),T=0;
+function frame(now){
+ const dt=Math.min(.05,(now-last)/1000);last=now;T+=dt;
+ const on=S.km1||S.km2,fw=S.dir>0;
+ tg2('gF',S.km1);tg2('gR',S.km2);tg2('gC1',on);tg2('gCF',on&&fw);tg2('gCR',on&&!fw);tg('tX',S.km2);
+ [['k0',S.km1],['k1',S.km2]].forEach((a,i)=>{$(a[0]).firstElementChild.classList.toggle('on',a[1]);tg('c'+i,a[1]);tg('o'+i,a[1])});
+ FX=[90,150,210];RX=[330,390,450];
+ FX.forEach((x,i)=>{const b=$('f'+i);b.setAttribute('x2',S.km1?x:x+14);b.setAttribute('y2',S.km1?135:140)});
+ RX.forEach((x,i)=>{const b=$('r'+i);b.setAttribute('x2',S.km2?x:x+14);b.setAttribute('y2',S.km2?135:140)});
+ const n=Date.now();let any=0;
+ for(let i=0;i<6;i++){const v=lit['i'+i]>n;any|=v;tg('i'+i,v)}any|=lit.a>n;tg('bus',any);
+ tg('lmF',S.km1);tg('lmR',S.km2);tg('ilk',S.st==='DEAD'||(S.auto&&S.st==='IDLE'&&S.aw>0));tg('lmA',S.auto);tg('lA',S.auto);$('bA').setAttribute('stroke-width',S.auto?4:0);$('hAt').textContent=S.auto?'HMI AUTO: ON':'HMI AUTO';
+ const target=S.km1?1440:S.km2?-1440:0,tc=target?1.2:1.8;
+ S.speed+=(target-S.speed)*(1-Math.exp(-dt/tc));S.ang=(S.ang+S.speed*.45*dt)%360;
+ $('rot').setAttribute('transform','rotate('+S.ang+' 150 480)');
+ ['rl0','rl1'].forEach(()=>{});$('spk').setAttribute('transform','rotate('+S.ang+' 582 608)');$('spk2').setAttribute('transform','rotate('+S.ang+' 858 608)');
+ bx=Math.min(828,Math.max(572,bx+S.speed/1440*28*dt));
+ if(bx>=828&&S.km1){run('s','LIMIT FWD');S.aw=2;S.ad=-1}if(bx<=572&&S.km2){run('s','LIMIT REV');S.aw=2;S.ad=1;if(S.auto)S.cyc++}
+ $('bx').setAttribute('transform','translate('+bx+' 0)');
+ tg('lsF',bx>=828);tg('lsR',bx<=572);tg('i6',bx>=828);tg('i7',bx<=572);
+ const rpm=Math.round(Math.abs(S.speed)),mv=rpm>20,dtx=mv?(S.speed>0?'FORWARD ⟳':'REVERSE ⟲'):'STOPPED';
+ $('mRpm').textContent=rpm+' rpm';$('mDir').textContent=dtx;$('sN').textContent=rpm+' rpm';$('sD').textContent=S.st==='DEAD'?'WAIT':on?(fw?'FWD ⟳':'REV ⟲'):(mv?'COAST':'STOP');
+ const seq=on?(fw?'L1 L2 L3':'L1 L3 L2'):'–';$('sP').textContent=seq;
+ $('tSeq').textContent=on?(fw?'U=L1  V=L2  W=L3':'U=L1  V=L3  W=L2'):'No voltage at terminals';
+ $('cvT').textContent=mv?(S.speed>0?'Belt moving → forward':'Belt moving ← reverse'):'Belt stopped';
+ $('tState').textContent=S.auto&&S.st==='IDLE'?'AUTO – WAITING':names[S.st];$('tDir').textContent='Direction: '+(on?(fw?'Forward':'Reverse'):S.st==='DEAD'?'changing…':'–');$('tSrc').textContent=S.auto?'AUTO · cycles: '+S.cyc:'Last cmd: '+S.src;
+ const aw=S.auto&&S.st==='IDLE',f=S.st==='DEAD'?S.t/2:aw?S.aw/2:0;$('tTim').textContent=(aw?'Auto wait: ':'Dead time T1: ')+(S.st==='DEAD'?S.t.toFixed(1):aw?S.aw.toFixed(1):'2.0')+' s';
+ $('barT').setAttribute('width',148*f);$('barP').setAttribute('width',140*f);
+ for(let i=0;i<4;i++)$('p'+i).classList.toggle('act',i===idx[S.st]);$('p4').classList.toggle('act',!!S.auto);
+ const tl=S.st==='DEAD'?0:on?.75:0;S.lvl+=(tl-S.lvl)*(1-Math.exp(-dt/.25));
+ const ph=[0,fw?-2.0944:2.0944,fw?-4.1888:-2.0944],col=['#e53935',fw?'#f2b705':'#1e88e5',fw?'#1e88e5':'#f2b705'];
+ for(let k=0;k<3;k++){let d='';for(let i=0;i<=80;i++){const x=30+i*460/80,y=615-32*S.lvl*Math.sin(i/80*4*Math.PI+ph[k]-T*4);d+=(i?'L':'M')+x.toFixed(1)+' '+y.toFixed(1)}$('wv'+k).setAttribute('d',d);$('wv'+k).setAttribute('stroke',col[k])}
+ requestAnimationFrame(frame)}
+requestAnimationFrame(frame);
+</script></body></html>
